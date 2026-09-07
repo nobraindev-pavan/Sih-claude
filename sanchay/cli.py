@@ -37,6 +37,12 @@ LABEL = {"baseline_fcfs": "B1 uncoordinated (FCFS)",
 def _pipeline(args, rb: Rulebook):
     sc = generate(GenConfig(seed=args.seed, demand=args.demand,
                             horizon_days=args.days), rb)
+    if getattr(args, "ml", False):
+        from .ml.duration import apply_predictions, train_and_report
+        model, rep = train_and_report()
+        apply_predictions(sc, rb, model, quantile=True)
+        print(f"planning to the model's P{int(model.quantile * 100)} durations "
+              f"(MAE {rep.mae_min} min vs {rep.baseline_mae_min} for nominal)")
     tc = TrafficCostModel(sc.sections, sc.trains, sc.paths)
     blocks = build_candidate_blocks(sc, tc, rb)
     feasible = feasible_pairs(sc.tasks, blocks)
@@ -190,6 +196,31 @@ def cmd_whatif(args) -> int:
     return 0
 
 
+def cmd_ml(args) -> int:
+    from .ml.duration import DEFAULT_LOG, train_and_report
+    from .ml.value_experiment import report_multi, run_multi
+
+    log = Path(args.log or DEFAULT_LOG)
+    if not log.exists():
+        print(f"no execution log at {log} - run `python -m sanchay gen` first")
+        return 1
+    print(f"training the duration model on {log}\n")
+    model, rep = train_and_report(log, quantile=args.quantile)
+    print(rep.summary())
+    print("\ntop features")
+    for name, gain in model.feature_importance(10):
+        print(f"  {name:26s} {gain}")
+
+    if args.experiment:
+        print("\n" + "=" * 76)
+        print("DOES THE MODEL MAKE THE PLAN BETTER?\n")
+        rb = Rulebook.load()
+        buckets = run_multi(rb, model, seeds=tuple(range(1, args.scenarios + 1)),
+                            time_limit=args.time_limit)
+        print(report_multi(buckets))
+    return 0
+
+
 def cmd_bench(args) -> int:
     from .eval.harness import RunConfig, run, summarise, write_csv
     cfg = RunConfig(scenarios=args.scenarios,
@@ -231,6 +262,8 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--route", default="MAIN", choices=["MAIN", "BRANCH", "DIV"])
     pl.add_argument("--day", type=int, default=1, help="day to draw")
     pl.add_argument("-v", "--verbose", action="store_true", help="solver log")
+    pl.add_argument("--ml", action="store_true",
+                    help="plan to the duration model's P80 instead of nominal")
     pl.set_defaults(func=cmd_plan)
 
     ex = common(sub.add_parser("explain", help="why this block, why not that one"))
@@ -255,6 +288,17 @@ def build_parser() -> argparse.ArgumentParser:
     wi.add_argument("--section", default="MAIN05")
     wi.add_argument("--factor", type=float, default=1.25)
     wi.set_defaults(func=cmd_whatif)
+
+    ml = sub.add_parser("ml", help="train the duration model and test its value")
+    ml.add_argument("--log", default=None, help="execution log CSV")
+    ml.add_argument("--quantile", type=float, default=0.8,
+                    help="planning quantile; 0.5 plans to the median, which is "
+                         "how half your blocks come to overrun")
+    ml.add_argument("--experiment", action="store_true",
+                    help="also run the plan-and-execute value experiment")
+    ml.add_argument("--scenarios", type=int, default=5)
+    ml.add_argument("--time-limit", type=float, default=12.0)
+    ml.set_defaults(func=cmd_ml)
 
     b = sub.add_parser("bench", help="the full benchmark")
     b.add_argument("--scenarios", type=int, default=10)

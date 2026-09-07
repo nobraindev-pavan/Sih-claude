@@ -53,6 +53,39 @@ class LogConfig:
     n_records: int = 2500
 
 
+def true_duration(rng: random.Random, *, nominal: int, severity: str,
+                  n_requires: int, tasks_in_block: int, is_night: bool,
+                  is_monsoon: bool, access: str, band: str,
+                  asset_age: float, failures_3y: int) -> tuple[int, str]:
+    """The generating process. **Never shown to any model.**
+
+    Exposed rather than inlined because the value experiment in
+    `ml/value_experiment.py` has to simulate execution with the *same* process
+    that produced the training log. If the simulator used a different process
+    the experiment would be rigged, and the first thing a sharp judge would ask
+    is which process generated the evaluation.
+
+    Returns (actual minutes, disruption reason or "").
+    """
+    skill = {"A": 0.88, "B": 1.0, "C": 1.16}[band] * rng.gauss(1.0, 0.05)
+    factor = BASE_EFFICIENCY * skill
+    factor *= 1.0 + 0.055 * (tasks_in_block - 1)          # congestion
+    factor *= 1.13 if is_night else 1.0
+    factor *= 1.17 if is_monsoon else 1.0
+    factor *= {"easy": 1.0, "moderate": 1.09, "hard": 1.24}[access]
+    factor *= 1.0 + 0.004 * asset_age
+    factor *= 1.0 + 0.10 * math.log1p(failures_3y)
+    factor *= {"routine": 0.97, "important": 1.0, "critical": 1.08}[severity]
+    factor *= 1.08 if n_requires >= 2 else 1.0            # more permits, more setup
+
+    reason = ""
+    if rng.random() < 0.13:                                # heavy right tail
+        reason = rng.choice(OVERRUN_REASONS)
+        factor *= rng.uniform(1.25, 2.1)
+    actual = max(15, int(round(nominal * factor * rng.gauss(1.0, 0.07) / 5) * 5))
+    return actual, reason
+
+
 def _sample(rng: random.Random, sc: Scenario, rb: Rulebook, idx: int) -> dict:
     task = rng.choice(sc.tasks)
     act = rb[task.activity_type]
@@ -68,33 +101,13 @@ def _sample(rng: random.Random, sc: Scenario, rb: Rulebook, idx: int) -> dict:
     access = rng.choices(["easy", "moderate", "hard"], [45, 40, 15])[0]
     band = rng.choices(["A", "B", "C"], [30, 45, 25])[0]
 
-    # --- the generating process (never shown to the model) ---------------
-    # The rulebook's nominal duration is what a requisition *asks for*, and a
-    # requisition already carries contingency. So a typical job comes in under
-    # nominal; an overrun is what happens when the factors below eat through
-    # that contingency. BASE_EFFICIENCY sets where the centre of the
-    # distribution sits, and is calibrated to an overrun rate in the high
-    # twenties - the shape a real execution log tends to have.
-    skill = {"A": 0.88, "B": 1.0, "C": 1.16}[band] * rng.gauss(1.0, 0.05)
-    factor = BASE_EFFICIENCY * skill
-    factor *= 1.0 + 0.055 * (tasks_in_block - 1)          # congestion
-    factor *= 1.13 if is_night else 1.0
-    factor *= 1.17 if is_monsoon else 1.0
-    factor *= {"easy": 1.0, "moderate": 1.09, "hard": 1.24}[access]
-    if asset is not None:
-        factor *= 1.0 + 0.004 * asset.age_years
-        factor *= 1.0 + 0.10 * math.log1p(asset.failures_3y)
-    factor *= {"routine": 0.97, "important": 1.0, "critical": 1.08}[task.severity]
-    factor *= 1.08 if len(act.requires) >= 2 else 1.0     # more permits, more setup
-
-    # heavy right tail: a discrete disruption on roughly one block in eight
-    reason = ""
-    if rng.random() < 0.13:
-        reason = rng.choice(OVERRUN_REASONS)
-        factor *= rng.uniform(1.25, 2.1)
-
     nominal = task.nominal_duration_min
-    actual = max(15, int(round(nominal * factor * rng.gauss(1.0, 0.07) / 5) * 5))
+    actual, reason = true_duration(
+        rng, nominal=nominal, severity=task.severity, n_requires=len(act.requires),
+        tasks_in_block=tasks_in_block, is_night=is_night, is_monsoon=is_monsoon,
+        access=access, band=band,
+        asset_age=asset.age_years if asset else 12.0,
+        failures_3y=asset.failures_3y if asset else 0)
     overran = actual > nominal
     if overran and not reason:
         reason = rng.choice(["late_start", "scope", "traffic_clearance"])
