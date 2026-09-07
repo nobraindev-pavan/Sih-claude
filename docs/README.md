@@ -17,7 +17,7 @@ the team runs.
 | 9 | [`09-learning-path.md`](09-learning-path.md) | Zero coding experience → productive, per role |
 | 10 | [`10-demo-and-risks.md`](10-demo-and-risks.md) | Seven-minute demo script, judge Q&A, risk register |
 | — | [`field-mapping.md`](field-mapping.md) | Our schema ↔ TMS / SMMS / TDMS / COA / BDMS |
-| — | [`build-notes.md`](build-notes.md) | Where the code departs from these documents, and why |
+| — | [`build-notes.md`](build-notes.md) | Where the code departs from these documents, and why — **read before trusting a document over the source** |
 
 ## Calendar
 

@@ -108,14 +108,30 @@ class Counterfactual:
     reasons: list[str]
 
     def sentence(self) -> str:
+        """Plain English, including when the answer is embarrassing.
+
+        A negative delta means forcing the alternative produced a *better* plan
+        than the one we recommended - which happens when the search had not
+        converged inside its time limit. Saying so is better than hiding it: it
+        is exactly what the reported optimality gap means, and a planner who
+        catches the system glossing over it will not trust the rest.
+        """
         if not self.possible:
             return (f"{self.task_id} cannot go in that window: "
                     + " ".join(self.reasons))
-        bits = [f"that window is possible but costs "
-                f"{self.delta_objective:+.0f} on the objective"]
-        if self.delta_blocks:
-            bits.append(f"and changes the plan by {self.delta_blocks:+d} block(s)")
-        return f"{self.task_id}: " + ", ".join(bits) + "."
+        d = self.delta_objective or 0.0
+        if d > 1.0:
+            bits = [f"that window is possible but costs {d:+.0f} on the objective"]
+            if self.delta_blocks:
+                bits.append(f"and changes the plan by {self.delta_blocks:+d} block(s)")
+            return f"{self.task_id}: " + ", ".join(bits) + "."
+        if d < -1.0:
+            return (f"{self.task_id}: forcing that window found a plan {-d:.0f} "
+                    f"BETTER than the one recommended. Our plan was not proven "
+                    f"optimal within the time limit, so the search had simply not "
+                    f"found this. Re-solve for longer to close the gap.")
+        return (f"{self.task_id}: that window is equally good - the two placements "
+                f"cost the same, so either is defensible.")
 
 
 def _static_objections(task, alt: CandidateBlock, plan: Plan, sc: Scenario,

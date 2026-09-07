@@ -24,12 +24,25 @@ python -m sanchay gen          # build the synthetic Vijaypur division
 python -m sanchay plan         # run every method, compare, draw the train graph
 python -m sanchay explain      # why this block, and why not that one
 python -m sanchay whatif       # perturb an assumption and re-optimise
+python -m sanchay ml --experiment   # train the duration model and test its value
 python -m sanchay bench        # the full 30-scenario benchmark
-python -m pytest tests/ -q     # 41 tests, including the solver validation suite
+python -m pytest tests/ -q     # 61 tests, including the solver validation suite
 ```
 
 `python -m sanchay plan` writes `out/compare.html` — open it in a browser. No
 server, no network, no build step.
+
+### The web app
+
+```bash
+cd ui && npm install && npm run build && cd ..
+python -m sanchay serve        # UI on http://127.0.0.1:8000/, API docs at /docs
+```
+
+Click any block on the train graph for its cost decomposition and the reasons
+behind it; click *why not elsewhere?* on a task to force an alternative window
+and re-solve; run a what-if and watch the plan re-form. For frontend work,
+`npm run dev` in `ui/` proxies `/api` to the backend on port 8000.
 
 ## What it does
 

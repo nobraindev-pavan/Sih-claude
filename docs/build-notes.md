@@ -91,3 +91,37 @@ discrete disruptions. Calibrated to a ~30% overrun rate. `Task` already carries
 `predicted_duration_min` and `overrun_probability`, and the optimizer plans to
 the former. **Training the model is the ML seat's Phase 2 work** (doc 6); until
 then the prediction falls back to the nominal duration.
+
+## 10. Every derived solve reuses the base plan's time budget
+
+The API originally gave the base plan 12 seconds and each what-if 15. The
+what-if then "improved" the plan - fewer deferred tasks after withdrawing a
+gang - because the extra three seconds of search outweighed the disruption. A
+comparison between two solves with different budgets measures the budget.
+`Session.time_limit` is now the single budget for the base plan, every
+counterfactual and every what-if. This is the easiest way to lie with this tool;
+check it first if a what-if result looks too good.
+
+## 11. Concurrent requests for one world are serialised
+
+The UI asks for the scenario, the plan and the comparison in parallel. Without a
+per-key build lock all three started their own solve of the same world, competed
+for CPU, and a badly under-converged plan won the cache - 43 deferred tasks
+instead of 16. It looked like the optimizer being bad; it was three of them
+fighting. `PlanningService` now holds a lock per scenario key while building.
+
+## 12. Counterfactuals report a negative delta honestly
+
+Forcing an alternative window sometimes finds a plan *better* than the one
+recommended, because the base solve was not proven optimal inside its time
+limit. The explanation says exactly that rather than hiding it behind a signed
+number. It is what the reported optimality gap means, and a planner who catches
+the system glossing over it will not trust the rest of it.
+
+## 13. The ML model needs plan-level features it cannot have yet
+
+`tasks_in_block` and `start_hour` are properties of the *plan*, but we need
+durations to build the plan. `apply_predictions` breaks the loop with a stated
+planning assumption (a typical block holds two jobs, in the corridor window).
+Iterating - predict, plan, re-predict with the realised block composition - is a
+clean Phase 3 improvement, not a fix for a bug.

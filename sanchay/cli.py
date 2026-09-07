@@ -196,6 +196,20 @@ def cmd_whatif(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    import uvicorn
+    ui = Path("ui/dist")
+    if ui.is_dir():
+        print(f"UI:  http://{args.host}:{args.port}/")
+    else:
+        print("ui/dist not built - run `cd ui && npm install && npm run build`,")
+        print("or `npm run dev` in ui/ for the dev server on :5173")
+    print(f"API: http://{args.host}:{args.port}/docs")
+    uvicorn.run("sanchay.api.main:app", host=args.host, port=args.port,
+                reload=args.reload, log_level="info")
+    return 0
+
+
 def cmd_ml(args) -> int:
     from .ml.duration import DEFAULT_LOG, train_and_report
     from .ml.value_experiment import report_multi, run_multi
@@ -288,6 +302,12 @@ def build_parser() -> argparse.ArgumentParser:
     wi.add_argument("--section", default="MAIN05")
     wi.add_argument("--factor", type=float, default=1.25)
     wi.set_defaults(func=cmd_whatif)
+
+    sv = sub.add_parser("serve", help="run the API and the web UI")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--reload", action="store_true")
+    sv.set_defaults(func=cmd_serve)
 
     ml = sub.add_parser("ml", help="train the duration model and test its value")
     ml.add_argument("--log", default=None, help="execution log CSV")
