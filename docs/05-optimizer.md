@@ -212,14 +212,15 @@ status2 = solver.Solve(model2)
 This is the single most impressive thing in the demo, because it answers the planner's
 actual question with a number rather than an assertion.
 
-**3. Naming the binding constraint.** For infeasible counterfactuals, use CP-SAT assumptions:
-```python
-model.AddAssumptions([lit_due_date, lit_permit, lit_crew, lit_separation])
-if status == INFEASIBLE:
-    reasons = solver.SufficientAssumptionsForInfeasibility()
-    # -> "blocked by: crew availability + minimum separation"
-```
-Map each assumption literal to a plain-English sentence in a dict. Output:
+**3. Naming the binding constraint.** *(Implemented differently — see
+[`build-notes.md`](build-notes.md) §6.)* The shipped code checks the common
+objections directly in Python before touching the solver: wrong section, window
+too short, past the deadline, section already blocked, an incompatible activity
+already in that window. Those cover the cases planners actually ask about and
+give an instant, specific answer. CP-SAT assumptions
+(`AddAssumptions` + `SufficientAssumptionsForInfeasibility`) remain a worthwhile
+November upgrade for the residual cases. Either way the output is a sentence
+like:
 *"14:00 Tuesday is not possible: TRD gang 3 is committed at KM 40 until 15:20, and the S&T
 point overhaul requires 50 m separation from the tamping worksite."*
 

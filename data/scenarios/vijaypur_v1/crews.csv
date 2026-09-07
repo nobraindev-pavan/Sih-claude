@@ -1,0 +1,17 @@
+id,dept,crew_type,home_km,travel_speed_kmph
+TRACK_GANG-1,ENG,track_gang,157.8,30.0
+TRACK_GANG-2,ENG,track_gang,151.2,30.0
+TRACK_GANG-3,ENG,track_gang,26.0,30.0
+TRACK_GANG-4,ENG,track_gang,131.2,30.0
+TRACK_MACHINE-1,ENG,track_machine,38.8,30.0
+TRACK_MACHINE-2,ENG,track_machine,78.2,30.0
+BRIDGE_GANG-1,ENG,bridge_gang,145.2,30.0
+SIGNAL_TEAM-1,SNT,signal_team,61.1,30.0
+SIGNAL_TEAM-2,SNT,signal_team,0.2,30.0
+SIGNAL_TEAM-3,SNT,signal_team,158.5,30.0
+SIGNAL_TEAM-4,SNT,signal_team,138.6,30.0
+OHE_TEAM-1,TRD,ohe_team,169.0,30.0
+OHE_TEAM-2,TRD,ohe_team,85.0,30.0
+OHE_TEAM-3,TRD,ohe_team,166.4,30.0
+OHE_TOWER_CAR-1,TRD,ohe_tower_car,166.3,30.0
+OHE_TOWER_CAR-2,TRD,ohe_tower_car,57.6,30.0
