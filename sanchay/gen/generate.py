@@ -299,6 +299,11 @@ def _build_tasks(rng: random.Random, assets: list[Asset], rb: Rulebook,
 
         dur = int(act.nominal_duration_min * rng.uniform(0.85, 1.2) / 15) * 15
         dur = min(dur, rb.policy.max_block_duration_min)  # policy caps block length
+        # PLACEHOLDER ONLY. This is the generator's own hazard with noise on
+        # it - the ground truth, not a prediction. Handing it to the optimizer
+        # would be cheating, so `ml.risk.apply_risk` overwrites it with a model
+        # estimate computed from observable features. Anything that plans on
+        # this value is planning on information a real division does not have.
         risk = round(min(0.99, max(0.01, hazard * rng.uniform(0.85, 1.15))), 3)
 
         t = Task(

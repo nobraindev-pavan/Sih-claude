@@ -34,4 +34,7 @@ export const api = {
     post('/counterfactual', p, { taskId, blockId }),
   whatIf: (p, body) => post('/whatif', p, body),
   rulebook: () => get('/rulebook', {}),
+  workflow: (p) => get('/workflow', p),
+  transition: (p, body) => post('/workflow/transition', p, body),
+  workflowBulk: (p, body) => post('/workflow/bulk', p, body),
 }

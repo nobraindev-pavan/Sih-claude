@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import BlockDetail from './BlockDetail'
+import Sanction from './Sanction'
 import TrainGraph from './TrainGraph'
 import WhatIf from './WhatIf'
 
@@ -231,6 +232,14 @@ export default function App() {
           <div className="panel">
             <h2><span>Why this block?</span></h2>
             <BlockDetail params={params} block={selectedBlock} />
+          </div>
+
+          <div className="panel">
+            <h2>
+              <span>Sanction</span>
+              <span className="note">a human approves every block</span>
+            </h2>
+            <Sanction params={params} block={selectedBlock} />
           </div>
 
           <div className="panel">

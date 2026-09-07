@@ -1,4 +1,4 @@
-.PHONY: install gen plan explain whatif ml ui serve bench test clean
+.PHONY: install gen plan explain whatif ml ablate ui serve bench test clean
 
 install:
 	pip install -r requirements.txt
@@ -18,8 +18,11 @@ whatif:         ## perturb an assumption and re-optimise
 bench:          ## the full 30-scenario benchmark (~2 min)
 	python -m sanchay bench --scenarios 10 --time-limit 15 --jobs 4
 
-ml:             ## train the duration model and test whether it helps
-	python -m sanchay ml --experiment
+ml:             ## train both models and test whether they help
+	python -m sanchay ml --risk --experiment
+
+ablate:         ## ablations and the Pareto frontier
+	python -m sanchay ablate --seeds 3 --time-limit 12
 
 ui:             ## build the web frontend
 	cd ui && npm install && npm run build

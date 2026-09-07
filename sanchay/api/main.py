@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..core.workflow import WorkflowError
 from ..optimizer.cpsat import Weights
 from .service import METHOD_LABEL, PlanningService
 
@@ -170,6 +171,47 @@ def what_if(body: WhatIfBody,
                               factor=body.factor, seconds=secs)
     except KeyError:
         raise HTTPException(400, f"unknown what-if kind {body.kind}")
+
+
+@app.get("/api/workflow")
+def workflow(p: Scenario = Query(default_factory=Scenario)) -> dict:  # noqa: B008
+    """The sanction state of every block, and the audit trail."""
+    return service.workflow_json(_session(p))
+
+
+class TransitionBody(BaseModel):
+    blockId: str
+    toState: str
+    actor: str = "DOM"
+    note: str = ""
+    reasonCode: str | None = None
+
+
+@app.post("/api/workflow/transition")
+def transition(body: TransitionBody,
+               p: Scenario = Query(default_factory=Scenario)) -> dict:  # noqa: B008
+    try:
+        return service.transition(_session(p), body.blockId, body.toState,
+                                  body.actor, body.note, body.reasonCode)
+    except WorkflowError as exc:
+        # 409, not 400: the request is well-formed, the plan is simply not in a
+        # state where this move is allowed.
+        raise HTTPException(409, str(exc))
+
+
+class BulkBody(BaseModel):
+    action: str = Field(description="review_all | sanction_all")
+    actor: str = "DOM"
+    note: str = ""
+
+
+@app.post("/api/workflow/bulk")
+def workflow_bulk(body: BulkBody,
+                  p: Scenario = Query(default_factory=Scenario)) -> dict:  # noqa: B008
+    try:
+        return service.bulk(_session(p), body.action, body.actor, body.note)
+    except WorkflowError as exc:
+        raise HTTPException(409, str(exc))
 
 
 @app.get("/api/rulebook")

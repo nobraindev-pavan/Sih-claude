@@ -122,3 +122,51 @@ def test_concurrent_requests_for_one_world_solve_it_once(client):
     key = service.key_for(77, Q["demand"], Q["days"], False, service.solve(
         seed=77, demand=Q["demand"], days=Q["days"], time_limit=Q["timeLimit"]).weights)
     assert key in service._sessions
+
+
+# --- sanction workflow -----------------------------------------------------
+
+def test_workflow_starts_with_everything_proposed(client):
+    w = client.get("/api/workflow", params={**Q, "seed": 9}).json()
+    assert set(w["counts"]) == {"proposed"}
+    assert w["roles"] and w["reasonCodes"]
+
+
+def test_workflow_happy_path_and_audit_trail(client):
+    q = {**Q, "seed": 10}
+    w = client.get("/api/workflow", params=q).json()
+    block_id = next(iter(w["blocks"]))
+    client.post("/api/workflow/bulk", params=q,
+                json={"action": "review_all", "actor": "DOM"})
+    r = client.post("/api/workflow/transition", params=q,
+                    json={"blockId": block_id, "toState": "sanctioned",
+                          "actor": "DOM", "note": "weekly block meeting"}).json()
+    assert r["blocks"][block_id]["state"] == "sanctioned"
+    assert r["blocks"][block_id]["sanctionedBy"] == "DOM"
+    assert any("sanctioned" in e["line"] for e in r["trail"])
+
+
+def test_an_illegal_transition_is_409_not_500(client):
+    """The request is well-formed; the plan is simply not in a state where the
+    move is allowed. That is a conflict, not a bad request or a crash."""
+    q = {**Q, "seed": 11}
+    w = client.get("/api/workflow", params=q).json()
+    block_id = next(iter(w["blocks"]))
+    res = client.post("/api/workflow/transition", params=q,
+                      json={"blockId": block_id, "toState": "executed", "actor": "CHC"})
+    assert res.status_code == 409
+    assert "cannot move" in res.json()["detail"]
+
+
+def test_rejecting_without_a_reason_is_refused_over_http(client):
+    q = {**Q, "seed": 12}
+    w = client.get("/api/workflow", params=q).json()
+    block_id = next(iter(w["blocks"]))
+    bad = client.post("/api/workflow/transition", params=q,
+                      json={"blockId": block_id, "toState": "rejected", "actor": "DOM"})
+    assert bad.status_code == 409
+    good = client.post("/api/workflow/transition", params=q,
+                       json={"blockId": block_id, "toState": "rejected",
+                             "actor": "DOM", "reasonCode": "materials"})
+    assert good.status_code == 200
+    assert good.json()["overrideReasons"] == {"materials": 1}

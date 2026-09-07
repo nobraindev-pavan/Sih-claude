@@ -125,3 +125,53 @@ durations to build the plan. `apply_predictions` breaks the loop with a stated
 planning assumption (a typical block holds two jobs, in the corridor window).
 Iterating - predict, plan, re-predict with the realised block composition - is a
 clean Phase 3 improvement, not a fix for a bug.
+
+## 14. "Never INFEASIBLE" was not the same as "never fails"
+
+The `unsched` slack guarantees the model always *has* a solution. It does not
+guarantee the solver *finds* one: at a one-second limit CP-SAT returns UNKNOWN,
+which on a projector looks exactly as bad as INFEASIBLE. The anytime ablation
+found this, and the original error message compounded it by blaming an
+over-tight constraint - which would have sent someone hunting through the
+rulebook for a bug that was not there.
+
+`solve()` now keeps the warm-start plan and returns it on UNKNOWN, clearly
+labelled `UNKNOWN (fell back to greedy_coordinated)`. A short budget degrades to
+a worse plan rather than to no plan. With no hint at all it raises, and says to
+add one.
+
+## 15. risk_score was the generator's own ground truth
+
+Until the risk model existed, `Task.risk_score` came straight out of
+`gen.generate.true_hazard` with noise on it - the scenario was handing the
+optimizer the answer, and nothing downstream could honestly be called a
+prediction. `ml.risk.apply_risk` now overwrites it with a model estimate
+computed from observable features only, and recomputes priority from that. The
+generator's value is labelled a placeholder in the source.
+
+This is the kind of thing that is invisible in a demo and fatal in a viva.
+
+## 16. The risk model does not beat the simple rule at ranking
+
+Days-since-maintenance, fitted fairly as a one-feature logistic regression,
+scores AUC 0.827. Gradient boosting scores 0.823. On **ranking** the simple rule
+wins, and pretending otherwise would be the exact dishonesty docs/06-ml.md warns
+about.
+
+The model is better **calibrated** - Brier 0.096 against 0.102, with predicted
+probabilities tracking observed rates across all six bins. That distinction is
+the finding, not a consolation prize: the objective multiplies risk by
+criticality, so it needs a probability, and a ranking wearing a percentage sign
+would silently distort every trade-off in the plan.
+
+The report says all of this itself, and picks its own verdict from the numbers
+rather than asserting a win.
+
+## 17. The workflow refuses illegal moves rather than ignoring them
+
+Skipping a step, reviving a rejected block, sanctioning as the wrong role, or
+rejecting without a reason code all raise `WorkflowError` and come back from the
+API as HTTP 409 - the request is well-formed, the plan is simply not in a state
+where the move is allowed. A workflow that lets you skip a step is not a
+workflow, and a rejection nobody recorded a reason for teaches us nothing, which
+is the entire argument for keeping the trail.

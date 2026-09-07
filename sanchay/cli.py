@@ -39,10 +39,17 @@ def _pipeline(args, rb: Rulebook):
                             horizon_days=args.days), rb)
     if getattr(args, "ml", False):
         from .ml.duration import apply_predictions, train_and_report
+        from .ml.risk import apply_risk
+        from .ml.risk import train_and_report as train_risk
         model, rep = train_and_report()
         apply_predictions(sc, rb, model, quantile=True)
         print(f"planning to the model's P{int(model.quantile * 100)} durations "
               f"(MAE {rep.mae_min} min vs {rep.baseline_mae_min} for nominal)")
+        risk_model, risk_rep = train_risk()
+        apply_risk(sc, risk_model)
+        print(f"risk scores from the model (AUC {risk_rep.auc}, "
+              f"Brier {risk_rep.brier}; simple rule {risk_rep.baseline_auc}/"
+              f"{risk_rep.baseline_brier}) rather than the generator's hazard")
     tc = TrafficCostModel(sc.sections, sc.trains, sc.paths)
     blocks = build_candidate_blocks(sc, tc, rb)
     feasible = feasible_pairs(sc.tasks, blocks)
@@ -77,10 +84,15 @@ def cmd_gen(args) -> int:
     save_scenario(sc, out)
     rows = generate_log(sc, rb, LogConfig(seed=args.seed + 900, n_records=args.log_rows))
     write_log(rows, out / "execution_log.csv")
+    from .gen.asset_history import HistoryConfig, generate_history, write_history
+    hist = generate_history(sc, HistoryConfig(seed=args.seed + 700,
+                                              months=args.history_months))
+    write_history(hist, out / "asset_history.csv")
     print(f"{sc.name} -> {out}")
     print(f"  {len(sc.sections)} sections, {len(sc.assets)} assets, "
           f"{len(sc.tasks)} open tasks, {len(sc.trains)} train paths")
     print(f"  {len(rows)} historical block executions for the duration model")
+    print(f"  {len(hist)} monthly asset condition snapshots for the risk model")
     print("  SIMULATED DATA - schema-compatible with TMS/SMMS/TDMS/COA, not from them")
     return 0
 
@@ -225,6 +237,18 @@ def cmd_ml(args) -> int:
     for name, gain in model.feature_importance(10):
         print(f"  {name:26s} {gain}")
 
+    if args.risk:
+        from .ml.risk import DEFAULT_HISTORY
+        from .ml.risk import train_and_report as train_risk
+        hist = Path(args.history or DEFAULT_HISTORY)
+        if not hist.exists():
+            print(f"\nno asset history at {hist} - run `python -m sanchay gen`")
+            return 1
+        print("\n" + "=" * 76)
+        print(f"ASSET RISK MODEL  ({hist})\n")
+        _, risk_rep = train_risk(hist)
+        print(risk_rep.summary())
+
     if args.experiment:
         print("\n" + "=" * 76)
         print("DOES THE MODEL MAKE THE PLAN BETTER?\n")
@@ -232,6 +256,27 @@ def cmd_ml(args) -> int:
         buckets = run_multi(rb, model, seeds=tuple(range(1, args.scenarios + 1)),
                             time_limit=args.time_limit)
         print(report_multi(buckets))
+    return 0
+
+
+def cmd_ablate(args) -> int:
+    from .eval.ablations import pareto_svg, run, summarise, write_csv
+
+    seeds = tuple(range(1, args.seeds + 1))
+    studies = tuple(args.studies) if args.studies else (
+        "coordination", "pareto", "anytime", "screening", "durations")
+    print(f"ablations: {', '.join(studies)} over {len(seeds)} seed(s), "
+          f"{args.time_limit}s solver limit")
+    t0 = time.time()
+    rows = run(seeds=seeds, time_limit=args.time_limit, studies=studies)
+    print(f"done in {time.time() - t0:.0f}s\n")
+    print(summarise(rows))
+    OUT.mkdir(exist_ok=True)
+    write_csv(rows, OUT / "ablations.csv")
+    if "pareto" in studies:
+        (OUT / "pareto.svg").write_text(pareto_svg(rows))
+        print(f"wrote {OUT / 'pareto.svg'}")
+    print(f"wrote {OUT / 'ablations.csv'}")
     return 0
 
 
@@ -268,6 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     g = common(sub.add_parser("gen", help="generate and save a scenario"))
     g.add_argument("--name", default="vijaypur_v1")
     g.add_argument("--log-rows", type=int, default=2500)
+    g.add_argument("--history-months", type=int, default=24)
     g.set_defaults(func=cmd_gen)
 
     pl = common(sub.add_parser("plan", help="run every method and compare"))
@@ -316,9 +362,20 @@ def build_parser() -> argparse.ArgumentParser:
                          "how half your blocks come to overrun")
     ml.add_argument("--experiment", action="store_true",
                     help="also run the plan-and-execute value experiment")
+    ml.add_argument("--risk", action="store_true",
+                    help="also train and report the asset risk model")
+    ml.add_argument("--history", default=None, help="asset history CSV")
     ml.add_argument("--scenarios", type=int, default=5)
     ml.add_argument("--time-limit", type=float, default=12.0)
     ml.set_defaults(func=cmd_ml)
+
+    ab = sub.add_parser("ablate", help="ablations and the Pareto frontier")
+    ab.add_argument("--seeds", type=int, default=3)
+    ab.add_argument("--time-limit", type=float, default=12.0)
+    ab.add_argument("--studies", nargs="*",
+                    choices=["coordination", "pareto", "anytime", "screening",
+                             "durations"])
+    ab.set_defaults(func=cmd_ablate)
 
     b = sub.add_parser("bench", help="the full benchmark")
     b.add_argument("--scenarios", type=int, default=10)

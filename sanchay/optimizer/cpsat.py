@@ -14,6 +14,12 @@ The `unsched[t]` slack is a demo-safety feature, not a modelling nicety. With
 it the model can never return INFEASIBLE, so a judge who perturbs the what-if
 panel gets a plan with four deferred jobs and an explanation, rather than a red
 error on a projector.
+
+That is necessary but not sufficient. A model that *has* a solution can still
+return UNKNOWN if the time limit expires before the solver finds one - which on
+a projector looks exactly as bad as INFEASIBLE. So `solve()` also keeps the
+warm-start plan and returns it on UNKNOWN. Between the two, a plan always comes
+back: at worst the greedy one we started from, clearly labelled.
 """
 
 from __future__ import annotations
@@ -268,6 +274,7 @@ class BlockPlanner:
                 if key in self.start:
                     m.AddHint(self.start[key], s)
                     n += 1
+        self._hint_plan = plan
         self.stats.notes.append(f"warm start from {plan.method} ({len(plan.blocks)} blocks)")
         return n
 
@@ -287,9 +294,39 @@ class BlockPlanner:
 
         self.stats.solve_seconds = round(elapsed, 3)
         self.stats.status = solver.StatusName(status)
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            # Should be unreachable: the unsched slack makes every instance
-            # satisfiable. If this ever fires, a hard constraint is wrong.
+
+        if status == cp_model.UNKNOWN:
+            # Not infeasible - the time limit simply expired before the search
+            # found anything. Fall back to the plan we warm-started from, which
+            # is feasible by construction. A short budget then degrades to a
+            # worse plan rather than to no plan.
+            hint = getattr(self, "_hint_plan", None)
+            if hint is None:
+                raise RuntimeError(
+                    f"solver returned UNKNOWN after {elapsed:.1f}s with no warm "
+                    "start to fall back on - raise the time limit, or call "
+                    "add_hint() before solve()")
+            from ..eval.metrics import objective_of
+            fallback = Plan(
+                method="optimizer", blocks=list(hint.blocks),
+                unscheduled_task_ids=list(hint.unscheduled_task_ids),
+                solver_status=f"UNKNOWN (fell back to {hint.method})",
+                # No bound was proven, so the honest gap is 100% - not the 0%
+                # that leaving both at zero would report. A fallback plan that
+                # claims proven optimality is worse than one that admits it has
+                # no guarantee at all.
+                objective_value=objective_of(hint, self.sc, self.rb, self.weights),
+                best_bound=0.0,
+                solve_seconds=self.stats.solve_seconds,
+                weights=self.weights.as_dict())
+            self.stats.notes.append(
+                f"time limit expired before any solution; returned the "
+                f"{hint.method} warm start")
+            return fallback
+
+        if status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:
+            # Genuinely unreachable: the unsched slack makes every instance
+            # satisfiable. If this fires, a hard constraint is wrong.
             raise RuntimeError(
                 f"solver returned {solver.StatusName(status)} - a hard constraint "
                 "is over-tight; the unsched slack should make this impossible")

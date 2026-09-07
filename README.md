@@ -24,9 +24,10 @@ python -m sanchay gen          # build the synthetic Vijaypur division
 python -m sanchay plan         # run every method, compare, draw the train graph
 python -m sanchay explain      # why this block, and why not that one
 python -m sanchay whatif       # perturb an assumption and re-optimise
-python -m sanchay ml --experiment   # train the duration model and test its value
+python -m sanchay ml --risk --experiment   # train both models, test their value
 python -m sanchay bench        # the full 30-scenario benchmark
-python -m pytest tests/ -q     # 61 tests, including the solver validation suite
+python -m sanchay ablate       # ablations and the Pareto frontier
+python -m pytest tests/ -q     # 86 tests, including the solver validation suite
 ```
 
 `python -m sanchay plan` writes `out/compare.html` — open it in a browser. No
@@ -68,6 +69,10 @@ BDMS (requisitions) ─┘
    alternative window can be costed by forcing it and re-solving.
 5. **Re-plan.** Change an assumption and the plan re-forms — minimally, because
    the previous plan anchors the objective.
+6. **Sanction.** A block moves `proposed → under review → sanctioned → issued →
+   executed → returned`, each step recorded with an actor and a reason. Illegal
+   moves are refused, and a rejection needs a reason code — an override nobody
+   recorded a reason for teaches us nothing.
 
 ## The modelling decision that matters
 
@@ -136,8 +141,30 @@ Read it honestly, because this is how it should be presented:
 - **Zero hard-constraint violations** across all 120 plans. Every plan from every
   method is audited by `sanchay/eval/metrics.py:validate`.
 
-Full output and the per-scenario CSV: [`results/`](results/). Reproduce with
-`python -m sanchay bench`; a single run is `python -m sanchay plan --seed 1`.
+### Ablations — testing our own contributions rather than assuming them
+
+Forbid multi-department blocks and the solver keeps everything else — same
+candidates, same rulebook, same objective — losing only the ability to combine:
+
+| | separate blocks | train cost | work done |
+|---|---|---|---|
+| coordination allowed | **68.0** | **2,703** | 85.8% |
+| coordination forbidden | 100.0 | 4,706 | 87.6% |
+
+Note what does *not* move. Coordination is not how the work gets done; it is how
+the work gets done with **32% fewer disruptions and 43% less traffic
+displaced**. Completion is unchanged, and claiming otherwise would be claiming
+something the experiment does not show.
+
+Sweeping the block setup cost from 0 to 2,000 traces a clean frontier — 94
+blocks at 5,878 weighted train-minutes down to 57 blocks at 2,135. Every point
+is a legitimate plan, which is the argument that the objective is a trade-off
+surface a division can choose a point on rather than a number we tuned until it
+flattered us. Chart and the other three studies: [`results/ablations.md`](results/ablations.md).
+
+Full output and the per-scenario CSVs: [`results/`](results/). Reproduce with
+`python -m sanchay bench` and `python -m sanchay ablate`; a single run is
+`python -m sanchay plan --seed 1`.
 
 **Every figure here is simulated.** The data is schema-compatible with TMS,
 SMMS, TDMS and COA; it does not come from them, and none of these numbers is a
@@ -172,7 +199,26 @@ tests/                 41 tests
   reviewed is the highest-value open item — see
   [`docs/02-domain-primer.md`](docs/02-domain-primer.md).
 - The plan is auditable: every block records the objective terms that paid for
-  it and the trains it displaces.
+  it, the trains it displaces, and who moved it through sanction.
+- The optimizer cannot trade safety against cost. There is no weight that would
+  let it: the rulebook enters as hard constraints, and every plan from every
+  method is checked by `sanchay/eval/metrics.py:validate` before any number is
+  reported.
+
+### What the models do and do not claim
+
+The **duration model** beats predicting the nominal duration (MAE 16.0 vs 24.9
+min) and its P80 cuts the block overrun rate in 6 of 8 scenarios. Planning to
+its *median* is worse than nominal — which is the point worth understanding.
+
+The **risk model does not meaningfully beat the simple rule at ranking**.
+Days-since-maintenance, fitted fairly as a one-feature logistic regression,
+scores AUC 0.827 against the model's 0.830 — inside the noise. It *is* better
+calibrated (Brier 0.094 vs 0.100), and calibration is what the objective
+actually needs, because it multiplies risk by criticality; a ranking wearing a
+percentage sign would silently distort every trade-off. We use the model for the
+number and say plainly that the ordering is no better. See
+[`results/ml-risk.md`](results/ml-risk.md).
 
 ## Where to start reading
 

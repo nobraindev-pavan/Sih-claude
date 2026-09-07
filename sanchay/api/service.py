@@ -20,6 +20,7 @@ from ..baselines import corridor, fcfs, greedy
 from ..core.candidates import build_candidate_blocks, feasible_pairs
 from ..core.models import Plan, Scenario
 from ..core.rulebook import Rulebook
+from ..core.workflow import OVERRIDE_REASONS, ROLES, PlanFile, WorkflowError
 from ..core.timeutil import MINUTES_PER_DAY, hhmm, stamp
 from ..core.traffic_cost import TrafficCostModel
 from ..eval.metrics import evaluate, validate
@@ -54,6 +55,9 @@ class Session:
     #: asked about. This is the easiest way to accidentally lie with this tool.
     time_limit: float = 12.0
     ml_note: str = ""
+    #: The sanction workflow for this session's optimizer plan. Created lazily,
+    #: because a plan nobody has opened does not need a file.
+    file: PlanFile | None = None
     created: float = field(default_factory=time.time)
 
 
@@ -70,6 +74,7 @@ class PlanningService:
         self._building: dict[str, threading.Lock] = {}
         self._max = max_sessions
         self._model = None
+        self._risk = None
 
     # -- building ---------------------------------------------------------
     def _duration_model(self):
@@ -77,6 +82,12 @@ class PlanningService:
             from ..ml.duration import train_and_report
             self._model, self._model_report = train_and_report()
         return self._model
+
+    def _risk_model(self):
+        if getattr(self, "_risk", None) is None:
+            from ..ml.risk import train_and_report
+            self._risk, self._risk_report = train_and_report()
+        return self._risk
 
     def key_for(self, seed: int, demand: str, days: int, ml: bool,
                 weights: Weights) -> str:
@@ -107,11 +118,18 @@ class PlanningService:
         note = ""
         if ml:
             from ..ml.duration import apply_predictions
+            from ..ml.risk import apply_risk
             model = self._duration_model()
             apply_predictions(sc, rb, model, quantile=True)
-            note = (f"planning to the duration model's P{int(model.quantile * 100)} "
+            risk = self._risk_model()
+            apply_risk(sc, risk)
+            note = (f"durations: model P{int(model.quantile * 100)} "
                     f"(MAE {self._model_report.mae_min} min vs "
-                    f"{self._model_report.baseline_mae_min} for nominal)")
+                    f"{self._model_report.baseline_mae_min} nominal) · "
+                    f"risk: model estimate, AUC {self._risk_report.auc}, "
+                    f"Brier {self._risk_report.brier} "
+                    f"(simple rule {self._risk_report.baseline_auc}/"
+                    f"{self._risk_report.baseline_brier})")
 
         tc = TrafficCostModel(sc.sections, sc.trains, sc.paths)
         blocks = build_candidate_blocks(sc, tc, rb)
@@ -218,6 +236,45 @@ class PlanningService:
             "metrics": m.as_row(),
             "valid": validate(plan, s.scenario, s.rulebook),
         }
+
+    # -- sanction workflow ------------------------------------------------
+    def plan_file(self, s: Session) -> PlanFile:
+        if s.file is None:
+            s.file = PlanFile.from_plan(s.plans["optimizer"], s.scenario.name)
+        return s.file
+
+    def workflow_json(self, s: Session) -> dict:
+        pf = self.plan_file(s)
+        return {
+            "planId": pf.plan_id, "scenario": pf.scenario,
+            "counts": pf.counts(),
+            "blocks": {k: {"state": v.state, "sanctionedBy": v.sanctioned_by}
+                       for k, v in pf.blocks.items()},
+            "overrideReasons": pf.override_reasons(),
+            "reasonCodes": OVERRIDE_REASONS,
+            "roles": ROLES,
+            "trail": [{
+                "id": e.id, "at": e.at, "actor": e.actor_role,
+                "blockId": e.block_id, "from": e.from_state, "to": e.to_state,
+                "reasonCode": e.reason_code, "note": e.note, "line": e.line(),
+            } for e in reversed(pf.events[-40:])],
+        }
+
+    def transition(self, s: Session, block_id: str, to_state: str, actor: str,
+                   note: str = "", reason_code: str | None = None) -> dict:
+        pf = self.plan_file(s)
+        pf.transition(block_id, to_state, actor, note, reason_code)
+        return self.workflow_json(s)
+
+    def bulk(self, s: Session, action: str, actor: str, note: str = "") -> dict:
+        pf = self.plan_file(s)
+        if action == "review_all":
+            pf.review_all(actor)
+        elif action == "sanction_all":
+            pf.sanction_all(actor, note)
+        else:
+            raise WorkflowError(f"unknown bulk action {action}")
+        return self.workflow_json(s)
 
     # -- features ---------------------------------------------------------
     def explain(self, s: Session, block_id: str) -> dict:
