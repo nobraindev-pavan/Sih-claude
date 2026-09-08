@@ -1,0 +1,11 @@
+.git
+.github
+ui/node_modules
+ui/dist
+out
+results
+docs
+tests
+__pycache__
+*.pyc
+.pytest_cache

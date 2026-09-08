@@ -35,6 +35,15 @@ export default function BlockDetail({ params, block }) {
     try {
       const r = await api.alternatives(params, t)
       setAlts(r.alternatives)
+      if (!r.alternatives.length) {
+        // Not an error: a task with a single feasible window genuinely has no
+        // alternative to compare against. Saying nothing would look broken.
+        setCf({
+          possible: false, reasons: [],
+          sentence: `${t}: there is no other window on its section that is long ` +
+            'enough and still inside its deadline, so this placement is forced.',
+        })
+      }
     } catch (e) { setErr(String(e)) } finally { setBusy(false) }
   }
 
@@ -104,7 +113,7 @@ export default function BlockDetail({ params, block }) {
             Alternative windows for <code>{taskId}</code>. Picking one forces it
             and re-solves the whole plan.
           </p>
-          <div className="wi">
+          <div className="wi alts">
             {alts.map((a) => (
               <button key={a.id} className="ghost" disabled={busy}
                 onClick={() => runCounterfactual(a.id)}>
@@ -116,8 +125,9 @@ export default function BlockDetail({ params, block }) {
       )}
 
       {cf && (
-        <div className={`cf${!cf.possible ? ' impossible' :
-          (cf.deltaObjective ?? 0) < -1 ? ' better' : ''}`}>
+        <div className={`cf${cf.possible === null ? ' better'
+          : !cf.possible ? ' impossible'
+          : (cf.deltaObjective ?? 0) < -1 ? ' better' : ''}`}>
           {cf.sentence}
         </div>
       )}

@@ -1,0 +1,19 @@
+# Render blueprint for the full interactive app.
+#
+# The free instance type has 512 MB of RAM and shared CPU. That is enough to
+# serve the console and run a short solve, but a 20-second solve on a shared
+# core takes noticeably longer, and free instances sleep after inactivity — the
+# first request after a sleep pays a cold start plus a solve. For anything you
+# are demonstrating live, use `starter` and keep a browser tab warm.
+services:
+  - type: web
+    name: sanchay
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # `free` works; see the note above before relying on it
+    healthCheckPath: /api/health
+    envVars:
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: PYTHONUNBUFFERED
+        value: "1"

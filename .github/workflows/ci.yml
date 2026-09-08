@@ -1,0 +1,76 @@
+name: tests
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -r requirements.txt pytest
+
+      # The suite solves real instances, so it is slower than a unit-test suite
+      # has any right to be. That is the cost of testing the thing that matters.
+      - run: python -m pytest tests/ -q
+
+      - name: The CLI must work from a clean checkout
+        run: |
+          python -m sanchay gen
+          python -m sanchay plan --time-limit 8 --html ''
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - run: npm run build
+        working-directory: ui
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # The deployment image is only worth having if it builds, and it cannot
+      # be built in the environment it was written in. This job is the proof.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: sanchay:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The container must actually serve a plan
+        run: |
+          docker run -d --name sanchay -p 8000:8000 sanchay:ci
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8000/api/health > /dev/null; then break; fi
+            sleep 3
+          done
+          curl -fsS http://127.0.0.1:8000/api/health
+          echo
+          # a real solve through the real API, on the smallest useful instance
+          curl -fsS "http://127.0.0.1:8000/api/plan?seed=1&demand=low&days=3&timeLimit=8&method=optimizer" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); \
+                assert d['valid']==[], d['valid']; \
+                assert d['blocks'], 'no blocks in the plan'; \
+                print('plan ok:', len(d['blocks']), 'blocks,', len(d['deferred']), 'deferred')"
+          curl -fsS -o /dev/null -w 'index: %{http_code}\n' http://127.0.0.1:8000/
+          docker logs sanchay | tail -5
+          docker rm -f sanchay

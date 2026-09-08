@@ -38,6 +38,8 @@ export default function App() {
   const [whatIfPlan, setWhatIfPlan] = useState(null)
   const [busy, setBusy] = useState(true)
   const [err, setErr] = useState(null)
+  const [info, setInfo] = useState(null)
+  const isStatic = !!api.isStatic
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(params)
 
@@ -47,7 +49,7 @@ export default function App() {
       const [m, p, c] = await Promise.all([
         api.scenario(params), api.plan(params, method), api.compare(params),
       ])
-      setMeta(m); setPlan(p); setCompare(c)
+      setMeta(m); setPlan(p); setCompare(c); setInfo(m.builtAt ?? null)
     } catch (e) { setErr(String(e)) } finally { setBusy(false) }
   }, [params, method])
 
@@ -94,11 +96,13 @@ export default function App() {
         <div className="controls">
           <div className="field">
             <label htmlFor="seed">scenario seed</label>
-            <input id="seed" type="number" min="1" max="200" value={draft.seed} onChange={set('seed')} />
+            <input id="seed" type="number" min="1" max="200" value={draft.seed}
+              onChange={set('seed')} disabled={isStatic} />
           </div>
           <div className="field">
             <label htmlFor="demand">maintenance demand</label>
-            <select id="demand" value={draft.demand} onChange={set('demand')}>
+            <select id="demand" value={draft.demand} onChange={set('demand')}
+              disabled={isStatic}>
               <option value="low">low</option>
               <option value="normal">normal</option>
               <option value="surge">surge</option>
@@ -106,29 +110,53 @@ export default function App() {
           </div>
           <div className="field">
             <label htmlFor="tl">solver limit (s)</label>
-            <input id="tl" type="number" min="1" max="60" value={draft.timeLimit} onChange={set('timeLimit')} />
+            <input id="tl" type="number" min="1" max="60" value={draft.timeLimit}
+              onChange={set('timeLimit')} disabled={isStatic} />
           </div>
           <div className="field">
-            <label htmlFor="setup">block setup cost {draft.setup}</label>
-            <input id="setup" type="range" min="0" max="2000" step="50"
+            <label htmlFor="setup">
+              block setup cost {draft.setup}
+              {isStatic && <span className="muted"> · snaps to solved stops</span>}
+            </label>
+            <input id="setup" type="range" min="0" max="2000"
+              step={isStatic ? 250 : 50} list={isStatic ? 'stops' : undefined}
               value={draft.setup} onChange={set('setup')} />
+            {isStatic && (
+              <datalist id="stops">
+                {[0, 250, 500, 1000, 2000].map((v) => <option key={v} value={v} />)}
+              </datalist>
+            )}
           </div>
           <div className="field">
             <label htmlFor="traincost">train disruption weight {draft.train}</label>
             <input id="traincost" type="range" min="0" max="10" step="1"
-              value={draft.train} onChange={set('train')} />
+              value={draft.train} onChange={set('train')} disabled={isStatic} />
           </div>
           <div className="field">
             <label>&nbsp;</label>
             <label className="toggle">
-              <input type="checkbox" checked={draft.ml} onChange={set('ml')} />
+              <input type="checkbox" checked={draft.ml} onChange={set('ml')}
+                disabled={isStatic} />
               plan to ML P80 durations
             </label>
           </div>
           <button onClick={() => setParams(draft)} disabled={busy || !dirty}>
-            {busy ? 'solving…' : dirty ? 'Re-solve' : 'Up to date'}
+            {busy ? (isStatic ? 'loading…' : 'solving…')
+              : dirty ? (isStatic ? 'Apply' : 'Re-solve') : 'Up to date'}
           </button>
         </div>
+        {isStatic && (
+          <p className="disclaimer" style={{ borderLeftColor: 'var(--accent)',
+            color: 'var(--ink-2)' }}>
+            <strong>Pre-solved demo.</strong> Every plan on this page was
+            computed ahead of time{info ? ` (${info})` : ''} and shipped as
+            data — the solver itself needs about twenty seconds of CPU per
+            scenario, which does not belong behind a web request. The scenario,
+            what-ifs and weight stops below are real solver output; anything
+            needing a fresh solve says so. Clone the repo and run
+            <code> python -m sanchay serve</code> for the live version.
+          </p>
+        )}
         {meta?.network.mlNote && <p className="muted" style={{ marginTop: 8 }}>{meta.network.mlNote}</p>}
         {err && <p className="err">{err}</p>}
       </header>

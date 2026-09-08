@@ -208,6 +208,21 @@ def cmd_whatif(args) -> int:
     return 0
 
 
+def cmd_export(args) -> int:
+    from .export_static import ExportConfig, build, write
+
+    cfg = ExportConfig(seed=args.seed, demand=args.demand, days=args.days,
+                       ml=not args.no_ml, time_limit=args.time_limit,
+                       out=Path(args.out))
+    bundle = build(cfg)
+    path = write(bundle, cfg.out)
+    size = path.stat().st_size / 1024
+    print(f"\nwrote {path}  ({size:.0f} KB)")
+    print("build the UI in static mode to use it:")
+    print("  cd ui && VITE_STATIC=1 npm run build")
+    return 0
+
+
 def cmd_serve(args) -> int:
     import uvicorn
     ui = Path("ui/dist")
@@ -348,6 +363,13 @@ def build_parser() -> argparse.ArgumentParser:
     wi.add_argument("--section", default="MAIN05")
     wi.add_argument("--factor", type=float, default=1.25)
     wi.set_defaults(func=cmd_whatif)
+
+    ex = common(sub.add_parser(
+        "export", help="bake a pre-solved demo bundle for the static site"))
+    ex.add_argument("--time-limit", type=float, default=20.0)
+    ex.add_argument("--no-ml", action="store_true")
+    ex.add_argument("--out", default="ui/public/demo-bundle.json")
+    ex.set_defaults(func=cmd_export)
 
     sv = sub.add_parser("serve", help="run the API and the web UI")
     sv.add_argument("--host", default="127.0.0.1")

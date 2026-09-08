@@ -1,0 +1,74 @@
+name: Publish the demo to GitHub Pages
+
+# Publishes the pre-solved static console. The bundle is committed rather than
+# built here on purpose: building it means running the solver for several
+# minutes, which is a poor use of CI and would make every docs typo trigger it.
+# Regenerate it deliberately with `python -m sanchay export`.
+
+on:
+  push:
+    branches: [main, claude/sih26027-project-plan-wlgfgo]
+    paths:
+      - 'ui/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail early if the pre-solved bundle is missing
+        run: |
+          test -f ui/public/demo-bundle.json || {
+            echo "ui/public/demo-bundle.json is missing."
+            echo "Regenerate it with: python -m sanchay export"
+            exit 1
+          }
+          echo "bundle: $(du -h ui/public/demo-bundle.json | cut -f1)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - run: npm ci
+        working-directory: ui
+
+      - name: Build the static console
+        working-directory: ui
+        env:
+          VITE_STATIC: '1'
+          # Pages serves from /<repo>/, not the domain root.
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turn Pages on the first time rather than making it a manual step
+          # someone has to discover from a failing run.
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ui/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

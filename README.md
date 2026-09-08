@@ -27,11 +27,24 @@ python -m sanchay whatif       # perturb an assumption and re-optimise
 python -m sanchay ml --risk --experiment   # train both models, test their value
 python -m sanchay bench        # the full 30-scenario benchmark
 python -m sanchay ablate       # ablations and the Pareto frontier
-python -m pytest tests/ -q     # 86 tests, including the solver validation suite
+python -m pytest tests/ -q     # 96 tests, including the solver validation suite
 ```
 
 `python -m sanchay plan` writes `out/compare.html` — open it in a browser. No
 server, no network, no build step.
+
+### Deploy it
+
+The **pre-solved demo** is a static site — GitHub Pages, Vercel, anywhere.
+The **live app** needs a container host, because a solve takes 15–20 seconds and
+OR-Tools is over 100 MB; serverless platforms cap below both. Dockerfile,
+`render.yaml`, `fly.toml`, `vercel.json` and the Pages workflow are all in place
+— see [`DEPLOY.md`](DEPLOY.md).
+
+```bash
+python -m sanchay export       # bake the pre-solved demo bundle (~8 min)
+docker build -t sanchay . && docker run -p 8000:8000 sanchay
+```
 
 ### The web app
 

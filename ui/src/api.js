@@ -1,3 +1,13 @@
+// Two backends behind one surface.
+//
+// The published demo runs against a pre-solved bundle with no server at all
+// (staticApi.js). Locally, the same components talk to FastAPI. Choosing here
+// rather than in every component means neither knows which it is using.
+
+import { staticApi } from './staticApi'
+
+const STATIC = import.meta.env.VITE_STATIC === '1'
+
 // Every request carries the scenario parameters, because the backend caches a
 // solved world per parameter set. Changing a weight or the seed is therefore a
 // different world, and the first request for it pays the solve time.
@@ -23,7 +33,7 @@ async function post(path, params, body) {
   return res.json()
 }
 
-export const api = {
+const liveApi = {
   scenario: (p) => get('/scenario', p),
   plan: (p, method) => get('/plan', { ...p, method }),
   compare: (p) => get('/compare', p),
@@ -38,3 +48,5 @@ export const api = {
   transition: (p, body) => post('/workflow/transition', p, body),
   workflowBulk: (p, body) => post('/workflow/bulk', p, body),
 }
+
+export const api = STATIC ? staticApi : { ...liveApi, isStatic: false }
