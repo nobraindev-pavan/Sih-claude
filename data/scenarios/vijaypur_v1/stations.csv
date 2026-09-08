@@ -1,0 +1,17 @@
+code,name,km,line,is_block_station
+VJP,Vijaypur,0.0,MAIN,True
+KHD,Khandoli,16.0,MAIN,True
+BRW,Barwani,32.0,MAIN,True
+NGD,Nagdah,47.0,MAIN,True
+STP,Satpura Road,61.0,MAIN,True
+DHM,Dholpura,74.0,MAIN,True
+MKJ,Makarjeri Jn,88.0,MAIN,True
+AMB,Ambori,103.0,MAIN,True
+RSL,Rasulpur,120.0,MAIN,True
+TKD,Tikadih,136.0,MAIN,True
+BHN,Bhanwargarh,151.0,MAIN,True
+SGR,Sagarwada,180.0,MAIN,True
+PPL,Pipaliya,14.0,BRANCH,True
+GHT,Ghatera,29.0,BRANCH,True
+SLW,Salewara,44.0,BRANCH,True
+KNJ,Kanjari,60.0,BRANCH,True

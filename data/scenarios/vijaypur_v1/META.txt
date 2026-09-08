@@ -1,0 +1,5 @@
+name=vijaypur-s1-normal
+seed=1
+horizon_days=7
+SIMULATED DATA. Schema-compatible with TMS / SMMS / TDMS / COA; not
+derived from any real railway system. See docs/field-mapping.md.

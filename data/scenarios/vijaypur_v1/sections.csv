@@ -1,0 +1,17 @@
+id,from_station,to_station,km_from,km_to,line_type,electrified,max_speed_kmph,diversion_for
+MAIN01,VJP,KHD,0.0,16.0,double,True,110,
+MAIN02,KHD,BRW,16.0,32.0,double,True,110,
+MAIN03,BRW,NGD,32.0,47.0,double,True,110,
+MAIN04,NGD,STP,47.0,61.0,double,True,110,
+MAIN05,STP,DHM,61.0,74.0,double,True,110,
+MAIN06,DHM,MKJ,74.0,88.0,double,True,110,
+MAIN07,MKJ,AMB,88.0,103.0,double,True,110,
+MAIN08,AMB,RSL,103.0,120.0,double,True,110,
+MAIN09,RSL,TKD,120.0,136.0,double,True,110,
+MAIN10,TKD,BHN,136.0,151.0,double,True,110,
+MAIN11,BHN,SGR,151.0,180.0,double,True,110,
+BRCH01,MKJ,PPL,0.0,14.0,single,True,75,
+BRCH02,PPL,GHT,14.0,29.0,single,True,75,
+BRCH03,GHT,SLW,29.0,44.0,single,True,75,
+BRCH04,SLW,KNJ,44.0,60.0,single,True,75,
+DIV01,AMB,RSL,103.0,120.0,single,True,75,MAIN08

@@ -1,0 +1,179 @@
+# SAFETY RULEBOOK
+# =============================================================================
+# Which maintenance activities need which permits, and which may share a block.
+# The optimizer treats everything here as a HARD constraint - it cannot trade
+# safety against cost, and there is no weight that would let it.
+#
+# STATUS: derived from published sources (G&SR, AC Traction Manual Part I ch.6,
+# IRFCA operations FAQ) and SIMPLIFIED FOR THE PROTOTYPE. It has not been
+# reviewed by a serving railway officer. Say that out loud in the demo; a
+# labelled simplification is forgiven, a confident error is not.
+#
+# Get this reviewed by a domain contact - see docs/02-domain-primer.md.
+# -----------------------------------------------------------------------------
+# permits
+#   traffic_block  all train movement on the section stops
+#   power_block    OHE de-energised and earthed; needs a Permit To Work
+#   disconnection  a signalling asset leaves the interlocking; needs a
+#                  disconnection notice signed by the Station Master
+#
+# requires  work cannot proceed without these permits
+# forbids   work is impossible while this permit is held (e.g. you cannot test
+#           a signal circuit on a section whose OHE has been isolated)
+# min_separation_m  clearance required from any other worksite. Two jobs whose
+#           km extents come within this distance may share a block, but not at
+#           the same time.
+# =============================================================================
+
+activity_types:
+
+  # --- Engineering / Permanent Way -----------------------------------------
+  ENG_TAMPING:
+    dept: ENG
+    name: Track tamping and packing
+    requires: [traffic_block, power_block]   # machine fouls the OHE zone
+    nominal_duration_min: 120
+    min_separation_m: 200
+    crew_type: track_machine
+
+  ENG_RAIL_RENEWAL:
+    dept: ENG
+    name: Rail renewal / defective rail replacement
+    requires: [traffic_block, power_block]
+    nominal_duration_min: 180
+    min_separation_m: 250
+    crew_type: track_gang
+
+  ENG_WELD_REPAIR:
+    dept: ENG
+    name: Weld repair
+    requires: [traffic_block]
+    nominal_duration_min: 90
+    min_separation_m: 100
+    crew_type: track_gang
+
+  ENG_BALLAST_SCREENING:
+    dept: ENG
+    name: Deep ballast screening
+    requires: [traffic_block, power_block]
+    nominal_duration_min: 240
+    min_separation_m: 300
+    crew_type: track_machine
+
+  ENG_BRIDGE_INSPECTION:
+    dept: ENG
+    name: Bridge inspection and repair
+    requires: [traffic_block]
+    nominal_duration_min: 150
+    min_separation_m: 150
+    crew_type: bridge_gang
+
+  ENG_LC_MAINTENANCE:
+    dept: ENG
+    name: Level crossing maintenance
+    requires: [traffic_block]
+    nominal_duration_min: 60
+    min_separation_m: 50
+    crew_type: track_gang
+
+  # --- Signal & Telecommunications -----------------------------------------
+  SNT_POINT_OVERHAUL:
+    dept: SNT
+    name: Point machine overhaul
+    requires: [disconnection, traffic_block]
+    nominal_duration_min: 90
+    min_separation_m: 50
+    crew_type: signal_team
+
+  SNT_TRACK_CIRCUIT:
+    dept: SNT
+    name: Track circuit adjustment
+    requires: [disconnection]
+    nominal_duration_min: 60
+    min_separation_m: 30
+    crew_type: signal_team
+
+  SNT_SIGNAL_TESTING:
+    dept: SNT
+    name: Signal aspect testing
+    requires: [disconnection]
+    forbids: [power_block]      # the section must stay live to test properly
+    nominal_duration_min: 45
+    min_separation_m: 30
+    crew_type: signal_team
+
+  SNT_CABLE_WORK:
+    dept: SNT
+    name: Signalling cable laying / jointing
+    requires: [traffic_block]
+    nominal_duration_min: 120
+    min_separation_m: 40
+    crew_type: signal_team
+
+  SNT_AXLE_COUNTER:
+    dept: SNT
+    name: Axle counter replacement
+    requires: [disconnection, traffic_block]
+    nominal_duration_min: 75
+    min_separation_m: 30
+    crew_type: signal_team
+
+  # --- Traction Distribution ------------------------------------------------
+  TRD_OHE_INSULATOR:
+    dept: TRD
+    name: OHE insulator replacement
+    requires: [power_block]
+    nominal_duration_min: 60
+    min_separation_m: 100
+    crew_type: ohe_team
+
+  TRD_CONTACT_WIRE:
+    dept: TRD
+    name: Contact wire renewal
+    requires: [power_block, traffic_block]
+    nominal_duration_min: 180
+    min_separation_m: 200
+    crew_type: ohe_tower_car
+
+  TRD_MAST_REPAIR:
+    dept: TRD
+    name: OHE mast / cantilever repair
+    requires: [power_block]
+    nominal_duration_min: 90
+    min_separation_m: 100
+    crew_type: ohe_team
+
+  TRD_ISOLATOR_SERVICE:
+    dept: TRD
+    name: Section isolator servicing
+    requires: [power_block]
+    nominal_duration_min: 45
+    min_separation_m: 50
+    crew_type: ohe_team
+
+  TRD_TENSIONING:
+    dept: TRD
+    name: OHE tensioning / regulation
+    requires: [power_block, traffic_block]
+    nominal_duration_min: 120
+    min_separation_m: 150
+    crew_type: ohe_tower_car
+
+# Pairs that may never share a block even when their permits align and there is
+# enough physical separation, because the work itself is mutually unsafe or
+# would invalidate the other's result.
+incompatible_pairs:
+  # ballast disturbance under a point machine ruins the adjustment
+  - [ENG_TAMPING, SNT_POINT_OVERHAUL]
+  - [ENG_BALLAST_SCREENING, SNT_POINT_OVERHAUL]
+  - [ENG_BALLAST_SCREENING, SNT_TRACK_CIRCUIT]
+  # a tower car and a track machine cannot share a worksite
+  - [ENG_TAMPING, TRD_CONTACT_WIRE]
+  - [ENG_BALLAST_SCREENING, TRD_CONTACT_WIRE]
+
+policy:
+  max_block_duration_min: 240
+  min_block_duration_min: 45
+  # Night work costs more and is less safe. Penalised, not forbidden.
+  night_start_hour: 23
+  night_end_hour: 5
