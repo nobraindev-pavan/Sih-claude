@@ -27,7 +27,7 @@ python -m sanchay whatif       # perturb an assumption and re-optimise
 python -m sanchay ml --risk --experiment   # train both models, test their value
 python -m sanchay bench        # the full 30-scenario benchmark
 python -m sanchay ablate       # ablations and the Pareto frontier
-python -m pytest tests/ -q     # 96 tests, including the solver validation suite
+python -m pytest tests/ -q     # 96 tests (pip install -r requirements-dev.txt first)
 ```
 
 `python -m sanchay plan` writes `out/compare.html` — open it in a browser. No

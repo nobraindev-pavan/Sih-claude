@@ -28,9 +28,24 @@ at — and the app on something that runs a container.
 Already wired. `.github/workflows/pages.yml` builds `ui/` in static mode and
 publishes it on every push that touches the frontend.
 
-One-time setup, in the repository: **Settings → Pages → Source: GitHub
-Actions**. Then push, or run the workflow by hand from the Actions tab. The URL
-is `https://<user>.github.io/<repo>/`.
+**One-time setup, and it has to be done by hand.** A workflow cannot turn Pages
+on for you: `GITHUB_TOKEN` gets `Resource not accessible by integration` from
+the Pages API regardless of the permissions the workflow asks for, and
+`enablement: true` on `configure-pages` does not change that. The workflow
+checks for it and fails with these instructions rather than a bare 404.
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+   (`https://github.com/<user>/<repo>/settings/pages`)
+2. Re-run the workflow from the Actions tab.
+
+The URL is then `https://<user>.github.io/<repo>/`.
+
+**A second thing that will catch you.** Enabling Pages creates a `github-pages`
+environment whose deployment policy allows only the **default branch**. Deploying
+from a feature branch fails with *"Branch is not allowed to deploy to
+github-pages due to environment protection rules."* Either merge to `main`, or
+add the branch under **Settings → Environments → github-pages → Deployment
+branches**.
 
 The pre-solved bundle is **committed**, not built in CI, because building it
 runs the solver for several minutes. Regenerate it deliberately:

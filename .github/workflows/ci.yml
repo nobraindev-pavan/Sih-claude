@@ -17,7 +17,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements-dev.txt
 
       # The suite solves real instances, so it is slower than a unit-test suite
       # has any right to be. That is the cost of testing the thing that matters.

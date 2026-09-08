@@ -1,0 +1,8 @@
+# Test-only dependencies. Kept out of requirements.txt so the deployed image
+# does not carry them.
+-r requirements.txt
+pytest>=8.0
+# starlette's TestClient needs an HTTP client that is NOT a runtime dependency
+# of the app. It was present locally only as a transitive dependency of
+# fastapi[standard]; a clean install failed on it, which is what CI is for.
+httpx2>=2.0

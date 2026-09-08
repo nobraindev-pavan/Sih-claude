@@ -54,11 +54,30 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
         run: npm run build
 
+      # A workflow's GITHUB_TOKEN cannot create a Pages site - the API returns
+      # "Resource not accessible by integration" no matter what permissions the
+      # workflow requests, and `enablement: true` on configure-pages does not
+      # change that. Enabling Pages is a one-time click by someone with admin.
+      # Check for it here so the failure names the fix instead of surfacing a
+      # bare 404 from the Pages API.
+      - name: Check that Pages is enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" > /dev/null 2>&1; then
+            echo "Pages is enabled."
+          else
+            echo "::error::GitHub Pages is not enabled for this repository."
+            echo ""
+            echo "One-time setup, by someone with admin on the repo:"
+            echo "  Settings -> Pages -> Build and deployment -> Source: GitHub Actions"
+            echo "  https://github.com/${{ github.repository }}/settings/pages"
+            echo ""
+            echo "Then re-run this workflow from the Actions tab."
+            exit 1
+          fi
+
       - uses: actions/configure-pages@v5
-        with:
-          # Turn Pages on the first time rather than making it a manual step
-          # someone has to discover from a failing run.
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ui/dist
